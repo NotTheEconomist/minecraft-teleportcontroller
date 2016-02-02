@@ -1,5 +1,6 @@
 local component = require("component")
 local event = require("event")
+local fs = require("filesystem")
 local keyboard = require("keyboard")
 local serialization = require("serialization")
 local modem = component.modem
@@ -15,53 +16,97 @@ local receivers = {}
 
 local ok = modem.open(PORT)
 if not ok then
-	print("FAILED TO OPEN PORT")
-	os.exit(1)
+	modem.close(PORT)
+	ok = modem.open(PORT)
+	if not ok then
+		print("FAILED TO OPEN PORT")
+		os.exit(1)
+	end
+end
+
+function Receiver(t)
+	table.insert(receivers, t)
 end
 
 function _loadReceiverList(f)
-	function Receiver(t)
-		table.insert(receivers, t)
+	print("entering _loadReceiverList")
+	print("checking if f exists")
+	if not fs.exists(f) then
+		print("It doesn't")
+		io.open(f, "w"):close()
+	else
+		print("It does, so I'm executing it")
+		dofile(f)
+		print("Executed successfully")
 	end
-	dofile(f)
-	return receivers
+	print("exiting _loadReceiverList")
 end
 
 function _saveReceiverList(f)
+	print("entering _saveReceiverList with f = " .. f)
 	-- receivers should always be a table like:
 	--   Receiver{
+	--     dim = 0
 	--     x = 123,
 	--     y = 456,
 	--     z = 789,
 	--   }
-	io.output(f)
-	io.write("Receiver{\n")
-	for k,v in pairs(receivers) do
-		io.write("  " .. k .. " = ", v, ",\n")
+	local file, err = io.open(f, "w")
+	print("Opened f, file = " .. tostring(file))
+	if err ~= nil then
+		print(err)
+		return
 	end
-	io.write("}\n")
+	print("#receivers is " .. #receivers)
+	if #receivers > 0 then
+		for _, t in ipairs(receivers) do
+			file:write("Receiver{\n")
+			for k,v in pairs(t) do
+				print("printing k, v = " .. k .. ", " .. v)
+				file:write("  " .. k .. " = ", v, ",\n")
+			end
+			file:write("}\n")
+		end
+	end
+	file:close()
+	print("exiting _saveReceiverList")
 end
 
 function saveReceivers()
+	print("entering saveReceivers")
 	_saveReceiverList(RECEIVERDBPATH)
+	print("exiting saveReceivers")
+end
 
 function loadReceivers()
-	return _loadReceiverlist(RECEIVERDBPATH)
+	print("entering loadReceivers")
+	receivers = _loadReceiverList(RECEIVERDBPATH)
+	print("exiting loadReceivers")
 end
 
 function updateReceivers(newReceivers)
-	oldReceivers = _loadReceiverList(RECEIVERDBPATH)
-	oldSet = {}
-	new = {}
+	print("entering updateReceivers")
+	local oldReceivers = receivers
+	local oldSet = {}
+	local new = {}
+	-- print("old receivers include: ")
 	for _, t in ipairs(oldReceivers) do
-		oldSet["x " .. t.x .. ", " ..
-		       "y " .. t.y .. ", " ..
-		       "z " .. t.z] = true
+		s = "dim " .. t.dim .. ", " ..
+		    "x " .. t.x .. ", " ..
+		    "y " .. t.y .. ", " ..
+		    "z " .. t.z
+		oldSet[s] = true
+		-- print(s)
     end
+    print("updateReceivers: built oldSet")
+    -- print("new receivers include: ")
     for _, t in ipairs(newReceivers) do
-    	if oldSet["x " .. t.x .. ", " ..
-		          "y " .. t.y .. ", " ..
-		          "z " .. t.z] == nil then
+		s = "dim " .. t.dim .. ", " ..
+		    "x " .. t.x .. ", " ..
+		    "y " .. t.y .. ", " ..
+		    "z " .. t.z
+		-- print(s)
+    	if oldSet[s] == nil then
 			table.insert(new, t)
 		end
 	end
@@ -69,6 +114,7 @@ function updateReceivers(newReceivers)
 		table.insert(receivers, t)
 	end
 	saveReceivers()
+	print("exiting updateReceivers")
 end
 
 function handleKeyPress(name, ...)
@@ -84,19 +130,22 @@ function handleKeyPress(name, ...)
 	   code == keyboard.keys.right or
 	   code == keyboard.keys.enter then
 	    data = {name, address, char, code, playerName}
-		modem.send(DEST, PORT, serialization.serialize(data))
+		modem.send(DEST, PORT, table.unpack(data))
 	end
 end
 
 function handleRemoteInput(name, rcvAddr, sndAddr, port, distance, ...)
-	-- we don't have to check this at all right now, just pass it through
 	local data = {...}
-	--
+	
 	if data[1] == "getReceivers" then
+		print("Request received: getReceivers")
 		loadReceivers()
+		print("Receivers loaded")
 		modem.send(data[2], port, "sendReceivers", serialization.serialize(receivers))
+		print("Receivers sent to " .. data[2] .. ":" .. port)
 	end
 	if data[1] == "updateReceivers" then
+		print("Request received: updateReceivers")
 		updateReceivers(serialization.unserialize(data[3]))
 		modem.send(data[2], port, "ok")
 	end
