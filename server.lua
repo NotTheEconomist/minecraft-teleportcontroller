@@ -12,6 +12,10 @@ local RECEIVERDBPATH = "/etc/receiversdb.lua"
 
 local allowedPlayers = {["Areskale"]=true, ["Drunkensaint"]=true, ["rowenlemmings"]=true, }
 
+-- an array of tables with the following structure:
+--   {label="some string",
+--    address = {dim=0, x=1, y=2, z=3}}
+-- each object describes a teleport receiver pad.
 local receivers = {}
 
 local ok = modem.open(PORT)
@@ -46,10 +50,8 @@ function _saveReceiverList(f)
 	print("entering _saveReceiverList with f = " .. f)
 	-- receivers should always be a table like:
 	--   Receiver{
-	--     dim = 0
-	--     x = 123,
-	--     y = 456,
-	--     z = 789,
+	--     label = "",
+	--     address = {dim = 0 x = 123, y = 456, z = 789},
 	--   }
 	local file, err = io.open(f, "w")
 	print("Opened f, file = " .. tostring(file))
@@ -61,10 +63,11 @@ function _saveReceiverList(f)
 	if #receivers > 0 then
 		for _, t in ipairs(receivers) do
 			file:write("Receiver{\n")
-			for k,v in pairs(t) do
-				print("printing k, v = " .. k .. ", " .. v)
-				file:write("  " .. k .. " = ", v, ",\n")
-			end
+			file:write("  label = \"" .. t.label .. "\",\n")
+			file:write("  address = {dim = " .. t.dim ..
+			           ", x = " .. t.x ..
+			           ", y = " .. t.y ..
+			           ", z = " .. t.z .. "},\n")
 			file:write("}\n")
 		end
 	end
@@ -91,16 +94,18 @@ function updateReceivers(newReceivers)
 	local new = {}
 	-- print("old receivers include: ")
 	for _, t in ipairs(oldReceivers) do
-		s = "dim " .. t.dim .. ", " ..
-		    "x " .. t.x .. ", " ..
-		    "y " .. t.y .. ", " ..
-		    "z " .. t.z
+		s = "dim " .. t.address.dim .. ", " ..
+		    "x " .. t.address.x .. ", " ..
+		    "y " .. t.address.y .. ", " ..
+		    "z " .. t.address.z
 		oldSet[s] = true
 		-- print(s)
     end
     print("updateReceivers: built oldSet")
     -- print("new receivers include: ")
     for _, t in ipairs(newReceivers) do
+    	-- new receivers come string from the dialing device
+    	-- and are just a Receiver.address table.
 		s = "dim " .. t.dim .. ", " ..
 		    "x " .. t.x .. ", " ..
 		    "y " .. t.y .. ", " ..
@@ -111,7 +116,8 @@ function updateReceivers(newReceivers)
 		end
 	end
 	for _, t in ipairs(new) do
-		table.insert(receivers, t)
+		new_t = {label="", address=t}
+		table.insert(receivers, new_t)
 	end
 	saveReceivers()
 	print("exiting updateReceivers")
@@ -136,7 +142,7 @@ end
 
 function handleRemoteInput(name, rcvAddr, sndAddr, port, distance, ...)
 	local data = {...}
-	
+
 	if data[1] == "getReceivers" then
 		print("Request received: getReceivers")
 		loadReceivers()
