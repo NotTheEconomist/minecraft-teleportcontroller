@@ -22,7 +22,6 @@ function getReceivers()
 		print("Timeout while getting receiver list")
 		return ""
 	else
-		print("Got receivers")
 		return serialization.unserialize(data[7])
 	end
 end
@@ -82,35 +81,36 @@ function Cursor:move(direction)
 	end
 	self.last.x, self.last.y = self.x, self.y
 	self.x, self.y = newX, newY
-	Cursor.draw()
+	Cursor:draw()
 end
 
-function Cursor.draw()
+function Cursor:draw()
 	-- redraws the cursor
-	gpu.set(self.x, self.y, ">")
 	gpu.set(self.last.x, self.last.y, " ")
+	gpu.set(self.x, self.y, ">")
 end
 
 ------------------------- GUI DRAWING ----------------------------
 
 local rX, rY = component.gpu.getResolution()
+gpu.fill(1, 1, rX, rY, " ")  -- clear screen
 NUMCOLUMNS = 4
-local columns = {}
-local rows = {}
+columns = {}
+rows = {}
 function rows:getRow(x)
 	return x - 2
 end
 for i=0, NUMCOLUMNS do
-	columns.insert(i * math.floor((rX - NUMCOLUMNS - 1) / NUMCOLUMNS) + i + 1)
+	table.insert(columns, i * math.floor((rX - NUMCOLUMNS - 1) / NUMCOLUMNS) + i + 2)
 end
 for i=3, rY-2 do
-	rows.insert(i)
+	table.insert(rows, i)
 end
 
-for i, receiver in receivers do
-	gpu.set(columns[1], receiver.label)
+for i, receiver in ipairs(receivers) do
+	gpu.set(columns[1], rows[i], receiver.label)
 	gpu.set(columns[2], rows[i], string.format("dim: %d, x: %d, z: %d, y: %d",
-	                                   receiver.address.dim, receiver.address.x, receiver.address.z, receiver.address.y)
+	                                   receiver.address.dim, receiver.address.x, receiver.address.z, receiver.address.y))
 	-- this will span two rows!
 	gpu.set(columns[4], rows[i], "edit")
 end
@@ -121,24 +121,31 @@ Cursor:draw()
 ------------------------- EVENT LOOP ----------------------------
 
 while true do
-	print("entering event loop")
-	local e = {event.pull("modem_message", nil, nil, PORT, nil, "key_down")}
-	local port = e[4]
+	-- local e = {event.pull(1, "modem_message", nil, nil, PORT, nil, "key_down")}
+	-- local port = e[4]
 
-	if port == PORT then
-		_, _, _, code, playerName = table.unpack(e, 6)
-		if code == keyboard.keys.up then Cursor:move("up")
-		elseif code == keyboard.keys.down then Cursor:move("down")
-		elseif code == keyboard.keys.left then Cursor:move("left")
-		elseif code == keyboard.keys.right then Cursor:move("right")
-		elseif code == keyboard.keys.enter then
-			recv, edit = Cursor:get()
-			if not edit then
-				dd.dialOnce(trans.x, trans.z, trans.y, recv.dim, recv.x, recv.z, recv.y)
-			else
-				print("WIP") -- TODO: we need to figure out how to edit this crap!
-			end
-		end
+	-- if port == PORT then
+	-- 	_, _, _, code, playerName = table.unpack(e, 6)
+	-- 	if code == keyboard.keys.up then Cursor:move("up")
+	-- 	elseif code == keyboard.keys.down then Cursor:move("down")
+	-- 	elseif code == keyboard.keys.left then Cursor:move("left")
+	-- 	elseif code == keyboard.keys.right then Cursor:move("right")
+	-- 	elseif code == keyboard.keys.enter then
+	-- 		recv, edit = Cursor:get()
+	-- 		if not edit then
+	-- 			dd.dialOnce(trans.x, trans.z, trans.y, recv.dim, recv.x, recv.z, recv.y)
+	-- 		else
+	-- 			print("WIP") -- TODO: we need to figure out how to edit this crap!
+	-- 		end
+	-- 	end
+	-- end
+	local e = {event.pull(1, "key_down")}
+	code = e[4]
+	if code == keyboard.keys.up then Cursor:move("up")
+	elseif code == keyboard.keys.down then Cursor:move("down")
+	elseif code == keyboard.keys.left then Cursor:move("left")
+	elseif code == keyboard.keys.right then Cursor:move("right")
+	elseif code == keyboard.keys.enter then print("WIP")
 	end
 
 end

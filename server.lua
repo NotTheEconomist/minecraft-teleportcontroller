@@ -28,22 +28,23 @@ if not ok then
 	end
 end
 
-function Receiver(t)
-	table.insert(receivers, t)
-end
-
 function _loadReceiverList(f)
 	print("entering _loadReceiverList")
 	print("checking if f exists")
+	accum = {}
+	function Receiver(t)
+		table.insert(accum, t)
+	end
 	if not fs.exists(f) then
 		print("It doesn't")
 		io.open(f, "w"):close()
 	else
 		print("It does, so I'm executing it")
-		dofile(f)
+		loadfile(f, "t", _ENV)()
 		print("Executed successfully")
 	end
 	print("exiting _loadReceiverList")
+	return accum
 end
 
 function _saveReceiverList(f)
